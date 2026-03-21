@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Red Planet Rescue</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background:#0a0200;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  min-height:100vh;
+  font-family:'Courier New', monospace;
+  overflow:hidden;
+  user-select:none;
+}
+#wrapper {
+  position:relative;
+  width:100vw; height:100vh;
+  display:flex; align-items:center; justify-content:center;
+}
+canvas {
+  display:block;
+  image-rendering:pixelated;
+  image-rendering:crisp-edges;
+}
+#ui {
+  position:absolute; top:0; left:50%;
+  transform:translateX(-50%);
+  display:flex; justify-content:space-between; align-items:center;
+  padding:6px 12px;
+  background:rgba(0,0,0,0.7);
+  border-bottom:1px solid #ff4400;
+  font-size:13px; color:#ff9966;
+  pointer-events:none;
+  z-index:10;
+}
+#ui span { color:#ffcc00; margin-left:4px; }
+#ui .block { display:flex; align-items:center; gap:12px; }
+
+/* Mobile controls */
+#mobileCtrl {
+  position:absolute; bottom:0; left:50%; transform:translateX(-50%);
+  width:100%; max-width:576px;
+  display:none;
+  justify-content:space-between;
+  padding:8px 16px 12px;
+  z-index:10;
+  background:linear-gradient(transparent,rgba(0,0,0,0.5));
+}
+.mbtn {
+  width:64px; height:56px;
+  background:rgba(255,68,0,0.25);
+  border:2px solid rgba(255,68,0,0.6);
+  border-radius:10px;
+  color:#ffcc00; font-size:22px;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+  font-family:'Courier New',monospace; font-weight:bold;
+}
+.mbtn:active { background:rgba(255,68,0,0.6); }
+.mbtn-group { display:flex; gap:8px; }
+@media(max-width:700px) { #mobileCtrl { display:flex; } }
+
+/* Overlay screens */
+.screen {
+  position:absolute; top:0; left:0; width:100%; height:100%;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  background:rgba(0,0,0,0.88);
+  z-index:20; color:#ff9966;
+  font-family:'Courier New',monospace;
+}
+.screen h1 { font-size:clamp(28px,5vw,52px); color:#ff4400; letter-spacing:3px; text-shadow:0 0 30px #ff4400; margin-bottom:8px; }
+.screen h2 { font-size:clamp(18px,3vw,28px); color:#ff4400; letter-spacing:2px; margin-bottom:8px; }
+.screen p { font-size:clamp(11px,2vw,15px); margin:6px 0; text-align:center; max-width:420px; line-height:1.7; }
+.screen .sub { color:#ffcc00; font-size:clamp(10px,1.5vw,13px); margin-top:4px; }
+.screen .controls-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px 24px; margin:14px 0; font-size:clamp(10px,1.5vw,13px); }
+.screen .controls-grid b { color:#ffcc00; }
+.screen .start-btn {
+  margin-top:18px; padding:12px 36px;
+  background:#ff4400; color:#fff; border:none;
+  font-family:'Courier New',monospace; font-size:clamp(13px,2vw,18px); font-weight:bold;
+  letter-spacing:2px; cursor:pointer; border-radius:6px;
+  box-shadow:0 0 20px rgba(255,68,0,0.6);
+  animation:pulse 1.5s ease-in-out infinite;
+}
+.screen .start-btn:hover { background:#ff6633; }
+@keyframes pulse { 0%,100%{box-shadow:0 0 20px rgba(255,68,0,0.5)} 50%{box-shadow:0 0 40px rgba(255,68,0,0.9)} }
+.lives-display { font-size:clamp(18px,3vw,24px); margin:10px 0; letter-spacing:4px; }
+.score-big { font-size:clamp(22px,4vw,36px); color:#ffcc00; margin:8px 0; }
+</style>
+</head>
+<body>
+<div id="wrapper">
+  <canvas id="c"></canvas>
+
+  <div id="ui">
+    <div class="block">
+      🚀 <b style="color:#ff4400">RED PLANET RESCUE</b>
+    </div>
+    <div class="block">
+      ❤️ <span id="uiLives">3</span>
+      &nbsp;|&nbsp;⭐ <span id="uiScore">0</span>
+      &nbsp;|&nbsp;📋 LEVEL <span id="uiLevel">1</span>
+    </div>
+  </div>
+
+  <!-- TITLE SCREEN -->
+  <div class="screen" id="screenTitle">
+    <h1>RED PLANET</h1>
+    <h1 style="margin-top:-12px">RESCUE</h1>
+    <p class="sub">A MARS PUZZLE PLATFORMER</p>
+    <br>
+    <div class="controls-grid">
+      <div><b>← →</b> Move</div><div><b>SPACE / ↑</b> Jump</div>
+      <div><b>🔑 Key</b> Opens door</div><div><b>⚡ Switch</b> Clears path</div>
+      <div><b>🚪 Door</b> Next level</div><div><b>R</b> Restart level</div>
+    </div>
+    <p>Collect the key, hit switches, reach the exit.<br>Avoid the robots — they don't like visitors.</p>
+    <button class="start-btn" onclick="startGame()">▶ START MISSION</button>
+  </div>
+
+  <!-- LEVEL COMPLETE -->
+  <div class="screen" id="screenLevel" style="display:none">
+    <h2>✅ LEVEL COMPLETE!</h2>
+    <div class="score-big" id="lcScore"></div>
+    <p id="lcMsg"></p>
+    <button class="start-btn" onclick="nextLevel()">▶ NEXT LEVEL</button>
+  </div>
+
+  <!-- GAME OVER -->
+  <div class="screen" id="screenOver" style="display:none">
+    <h2 style="color:#ff2200">💀 MISSION FAILED</h2>
+    <p>The robots got you...</p>
+    <div class="score-big" id="goScore"></div>
+    <button class="start-btn" onclick="restartGame()">↩ TRY AGAIN</button>
+  </div>
+
+  <!-- WIN SCREEN -->
+  <div class="screen" id="screenWin" style="display:none">
+    <h1>🏆 MISSION</h1>
+    <h1 style="margin-top:-12px">COMPLETE!</h1>
+    <p>You rescued everyone on Mars!</p>
+    <div class="score-big" id="winScore"></div>
+    <div class="lives-display" id="winLives"></div>
+    <button class="start-btn" onclick="restartGame()">▶ PLAY AGAIN</button>
+  </div>
+
+  <!-- Mobile controls -->
+  <div id="mobileCtrl">
+    <div class="mbtn-group">
+      <div class="mbtn" id="mLeft">←</div>
+      <div class="mbtn" id="mRight">→</div>
+    </div>
+    <div class="mbtn" id="mJump" style="width:80px">↑</div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════
+const T = 32;          // tile size in pixels
+const COLS = 22;
+const ROWS = 14;
+const GRAVITY = 0.52;
+const MOVE_SPD = 3.4;
+const JUMP_V = -11.5;
+const AW = 18; const AH = 28; // astronaut hitbox
+
+// Tile types
+const AIR=0,WALL=1,DOOR=2,KEY=3,SWITCH=4,SWITCH_ON=5,SPIKE=6,EXIT=7,COIN=8;
+
+// ═══════════════════════════════════════════════════════
+// LEVEL DATA
+// W=wall, .=air, D=door, K=key, S=switch, X=exit,
+// ^=spike, C=coin, P=player start, E=enemy patrol
+// ═══════════════════════════════════════════════════════
+const LEVEL_MAPS = [
+// ── LEVEL 1: Introduction ───────────────────────────────
+`WWWWWWWWWWWWWWWWWWWWWW
+W....................W
+W....................W
+W..........WWWWW.....W
+W..........C.....S...W
+W....WWWWW...........W
+W....C.............D.W
+W.P..........K.......W
+WWWWWWW..............W
+W............WWWWWW..W
+W..C.....C...........W
+W....................W
+W..C.....C.......X...W
+WWWWWWWWWWWWWWWWWWWWWW`,
+
+// ── LEVEL 2: Moving Up ─────────────────────────────────
+`WWWWWWWWWWWWWWWWWWWWWW
+W....................W
+W....WWWWW.....C.....W
+W..........WWWW.....W
+W...C.......C.......W
+W...........K.......W
+W.....WWWWWWWWWWW...W
+W....................W
+W..P.....E.........W
+WWWWWWWW.....WWWWWWWW
+W..C...C.....C......W
+W....WWWWW..........W
+W..S.......D....X...W
+WWWWWWWWWWWWWWWWWWWWWW`,
+
+// ── LEVEL 3: Two Keys ──────────────────────────────────
+`WWWWWWWWWWWWWWWWWWWWWW
+W....................W
+W.P..WWWWWWWWWWW....W
+W....C.....K........W
+W....WWWWWWWWWWW....W
+W.................E.W
+WWWWW..........WWWWWW
+W..C...C...C........W
+W...WWWWWWWWW.......W
+W....K.....S........W
+W...WWWWWWWWW.......W
+W.E...............D.W
+W.....C...C....S....W
+WWWWWWWWWWWWWWWWWWWWWW`,
+
+// ── LEVEL 4: Robot Gauntlet ────────────────────────────
+`WWWWWWWWWWWWWWWWWWWWWW
+W....................W
+W.P..WWWWWWWWWWWW...W
+W....C.....C..K.....W
+WWWWWWWWWWWWWWWWW...W
+W...E...............W
+W....WWWWWWWWWWWW..W
+W..C...C...C........W
+W...WWWWWWWWW.......W
+W..E..............S.W
+WWWWWWWWWWWWWWWWWW..W
+W..C...E...C........W
+W....WWWWWW.....D...W
+WWWWWWWWWWWWWWWWWWWWWW`,
+
+// ── LEVEL 5: The Deep Mines ────────────────────────────
+`WWWWWWWWWWWWWWWWWWWWWW
+W.P..................W
+WWWWWWWWWW..WWWWWWWWW
+W....C.....K........W
+W...WWWWWWWWWWWWW...W
+W..E..C..............W
+WWWWWWWWWWWWWWWWWW..W
+W.......C...........W
+W..WWWWWWWWWWWWWWW..W
+W....E.......S..E...W
+W..WWWWWWWWWWWWWWW..W
+W.......C...........W
+W...S..E......D..X..W
+WWWWWWWWWWWWWWWWWWWWWW`,
+
+// ── LEVEL 6: Final Mission ─────────────────────────────
+`WWWWWWWWWWWWWWWWWWWWWW
+W.P.C.....E..........W
+WWWWWWWWWWWWWWWWWWW.W
+W....C.....C.....K..W
+W...WWWWWWWWWWWWWW..W
+W..E...C...E........W
+WWWWWWWWWWWWWWWWWW.W
+W.......C....E......W
+W..WWWWWWWWWWWWWWW..W
+W.K..E...C....S.E...W
+WWWWWWWWWWWWWWWWWWW.W
+W..C...E...C........W
+W....S...E.D.....X..W
+WWWWWWWWWWWWWWWWWWWWWW`,
+];
+
+// ═══════════════════════════════════════════════════════
+// GAME STATE
+// ═══════════════════════════════════════════════════════
+let canvas, ctx, W, H, scale;
+let gameState = 'title'; // title | playing | levelcomplete | gameover | win
+let currentLevel = 0;
+let score = 0;
+let lives = 3;
+let keys_needed = 0; // how many keys to collect
+let keys_held = 0;
+let switches_needed = 0;
+let switches_done = 0;
+let doorOpen = false;
+let animFrame = 0;
+let particles = [];
+let levelTime = 0;
+
+let tileMap = [];
+let playerStart = {x:0,y:0};
+let enemies = [];
+
+let player = {};
+
+const inputKeys = {};
+let mLeft=false, mRight=false, mJump=false, mJumpConsumed=false;
+
+// ═══════════════════════════════════════════════════════
+// PARSE LEVEL
+// ═══════════════════════════════════════════════════════
+function parseLevel(idx) {
+  const src = LEVEL_MAPS[idx];
+  const rows = src.trim().split('\n');
+  tileMap = [];
+  enemies = [];
+  keys_needed = 0; keys_held = 0;
+  switches_needed = 0; switches_done = 0;
+  doorOpen = false;
+  particles = [];
+  levelTime = 0;
+
+  for (let r = 0; r < ROWS; r++) {
+    tileMap[r] = [];
+    const row = rows[r] || '';
+    for (let c = 0; c < COLS; c++) {
+      const ch = row[c] || ' ';
+      let tile = AIR;
+      if (ch==='W') tile = WALL;
+      else if (ch==='D') { tile = DOOR; }
+      else if (ch==='K') { tile = KEY; keys_needed++; }
+      else if (ch==='S') { tile = SWITCH; switches_needed++; }
+      else if (ch==='X') tile = EXIT;
+      else if (ch==='^') tile = SPIKE;
+      else if (ch==='C') tile = COIN;
+      else if (ch==='P') { playerStart = {x: c*T + 4, y: r*T - AH}; tile = AIR; }
+      else if (ch==='E') {
+        enemies.push({ x: c*T, y: r*T - AH, vx: 1.2, vy: 0, onGround: false, alive: true, dir: 1, animT: 0 });
+        tile = AIR;
+      }
+      tileMap[r][c] = tile;
+    }
+  }
+
+  // If no explicit switches, door just needs key
+  checkDoor();
+
+  player = {
+    x: playerStart.x, y: playerStart.y,
+    vx:0, vy:0, onGround:false,
+    facing:1, alive:true,
+    invincible:0, // frames of invincibility
+    animT:0,
+  };
+}
+
+function checkDoor() {
+  if (keys_held >= keys_needed && switches_done >= switches_needed) {
+    doorOpen = true;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// COLLISION
+// ═══════════════════════════════════════════════════════
+function solidAt(col, row) {
+  if (col<0||col>=COLS||row<0||row>=ROWS) return true;
+  const t = tileMap[row][col];
+  return t===WALL || (t===DOOR && !doorOpen);
+}
+function tc(px) { return Math.floor(px/T); }
+function tr(py) { return Math.floor(py/T); }
+
+function moveEntity(e, aw, ah) {
+  // Horizontal
+  e.x += e.vx;
+  const l=e.x, r=e.x+aw;
+  if (e.vx>0) {
+    if (solidAt(tc(r),tr(e.y+2))||solidAt(tc(r),tr(e.y+ah-4))) {
+      e.x = tc(r)*T - aw - 1; e.vx = -Math.abs(e.vx);
+    }
+  } else if (e.vx<0) {
+    if (solidAt(tc(l),tr(e.y+2))||solidAt(tc(l),tr(e.y+ah-4))) {
+      e.x = (tc(l)+1)*T + 1; e.vx = Math.abs(e.vx);
+    }
+  }
+
+  // Vertical
+  e.vy += GRAVITY;
+  if (e.vy>15) e.vy=15;
+  e.y += e.vy;
+  e.onGround = false;
+
+  // Ceiling
+  if (e.vy<0) {
+    if (solidAt(tc(e.x+2),tr(e.y))||solidAt(tc(e.x+aw-2),tr(e.y))) {
+      e.y=(tr(e.y)+1)*T; e.vy=0;
+    }
+  }
+  // Floor
+  if (e.vy>=0) {
+    if (solidAt(tc(e.x+2),tr(e.y+ah))||solidAt(tc(e.x+aw-2),tr(e.y+ah))) {
+      e.y=tr(e.y+ah)*T - ah; e.vy=0; e.onGround=true;
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// PARTICLES
+// ═══════════════════════════════════════════════════════
+function spawnParticles(x,y,color,n,speed) {
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2, s=(0.5+Math.random())*speed;
+    particles.push({ x,y, vx:Math.cos(a)*s, vy:Math.sin(a)*s - 1,
+      life:1, decay:0.03+Math.random()*0.04, color, r:3+Math.random()*3 });
+  }
+}
+function updateParticles() {
+  particles = particles.filter(p=>{
+    p.x+=p.vx; p.y+=p.vy; p.vy+=0.15; p.life-=p.decay; return p.life>0;
+  });
+}
+function drawParticles() {
+  particles.forEach(p=>{
+    ctx.globalAlpha=p.life;
+    ctx.fillStyle=p.color;
+    ctx.beginPath();
+    ctx.arc(p.x*scale,p.y*scale,p.r*scale,0,Math.PI*2);
+    ctx.fill();
+  });
+  ctx.globalAlpha=1;
+}
+
+// ═══════════════════════════════════════════════════════
+// TILE INTERACTION
+// ═══════════════════════════════════════════════════════
+function checkTileInteraction() {
+  const cx = Math.round(player.x + AW/2);
+  const cy = Math.round(player.y + AH/2);
+  const checkPoints = [
+    {x:player.x+4,       y:player.y+AH/2},
+    {x:player.x+AW-4,    y:player.y+AH/2},
+    {x:player.x+AW/2,    y:player.y+4},
+    {x:player.x+AW/2,    y:player.y+AH-4},
+    {x:player.x+4,       y:player.y+4},
+    {x:player.x+AW-4,    y:player.y+4},
+  ];
+  for (const pt of checkPoints) {
+    const col=tc(pt.x), row=tr(pt.y);
+    if(col<0||col>=COLS||row<0||row>=ROWS) continue;
+    const tile=tileMap[row][col];
+
+    if(tile===KEY) {
+      tileMap[row][col]=AIR;
+      keys_held++;
+      score+=200;
+      spawnParticles(col*T+T/2, row*T+T/2, '#ffcc00', 12, 3);
+      checkDoor();
+    }
+    if(tile===COIN) {
+      tileMap[row][col]=AIR;
+      score+=50;
+      spawnParticles(col*T+T/2, row*T+T/2, '#ffdd44', 6, 2);
+    }
+    if(tile===SWITCH) {
+      tileMap[row][col]=SWITCH_ON;
+      switches_done++;
+      score+=150;
+      spawnParticles(col*T+T/2, row*T+T/2, '#00ff88', 10, 3);
+      checkDoor();
+    }
+    if(tile===SPIKE && player.invincible<=0) {
+      killPlayer();
+    }
+    if(tile===EXIT && doorOpen) {
+      levelComplete();
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// PLAYER DEATH / LEVEL COMPLETE
+// ═══════════════════════════════════════════════════════
+function killPlayer() {
+  if(player.invincible>0) return;
+  spawnParticles(player.x+AW/2, player.y+AH/2, '#ff4400', 20, 5);
+  lives--;
+  if(lives<=0) {
+    setTimeout(()=>showScreen('gameover'),600);
+  } else {
+    // Respawn with brief invincibility
+    setTimeout(()=>{
+      player.x=playerStart.x; player.y=playerStart.y;
+      player.vx=0; player.vy=0;
+      player.invincible=120;
+    },500);
+  }
+  updateHUD();
+}
+
+function levelComplete() {
+  if(gameState!=='playing') return;
+  gameState='levelcomplete';
+  const bonus = Math.max(0, 1000 - Math.floor(levelTime/60)*10);
+  score += bonus + 500;
+  updateHUD();
+  document.getElementById('lcScore').textContent = '⭐ SCORE: '+score;
+  document.getElementById('lcMsg').textContent = `Time bonus: +${bonus} pts  |  Level bonus: +500 pts`;
+  showScreen('level');
+}
+
+// ═══════════════════════════════════════════════════════
+// ENEMY UPDATE
+// ═══════════════════════════════════════════════════════
+function updateEnemies() {
+  enemies.forEach(e=>{
+    if(!e.alive) return;
+    e.animT++;
+
+    // Turn at edges/walls
+    const frontCol = tc(e.x + (e.vx>0 ? AW+2 : -2));
+    const footRow  = tr(e.y + AH + 2);
+    const groundAhead = solidAt(frontCol, footRow);
+    const wallAhead   = solidAt(frontCol, tr(e.y+AH/2));
+
+    if(!groundAhead || wallAhead) {
+      e.vx = -e.vx;
+      e.dir = e.vx>0?1:-1;
+    }
+
+    moveEntity(e, AW, AH);
+
+    // Touch player
+    if(player.invincible<=0 && player.alive &&
+       Math.abs((e.x+AW/2)-(player.x+AW/2))<AW-2 &&
+       Math.abs((e.y+AH/2)-(player.y+AH/2))<AH-2) {
+      killPlayer();
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// DRAW
+// ═══════════════════════════════════════════════════════
+const ROCK_COLORS = ['#8B2500','#C0392B','#5D1A00'];
+
+function drawTile(col,row,tile) {
+  const px=col*T*scale, py=row*T*scale, ts=T*scale;
+
+  if(tile===WALL) {
+    const g=ctx.createLinearGradient(px,py,px+ts,py+ts);
+    g.addColorStop(0,'#7a1f00'); g.addColorStop(0.5,'#b03010'); g.addColorStop(1,'#4a1200');
+    ctx.fillStyle=g; ctx.fillRect(px,py,ts,ts);
+    ctx.strokeStyle='rgba(255,80,20,0.3)'; ctx.lineWidth=scale;
+    ctx.strokeRect(px+0.5,py+0.5,ts-1,ts-1);
+    // crack lines
+    ctx.strokeStyle='rgba(0,0,0,0.35)'; ctx.lineWidth=scale*0.5;
+    ctx.beginPath();
+    ctx.moveTo(px+ts*0.15,py+ts*0.3); ctx.lineTo(px+ts*0.45,py+ts*0.25);
+    ctx.moveTo(px+ts*0.5,py+ts*0.6);  ctx.lineTo(px+ts*0.85,py+ts*0.65);
+    ctx.stroke();
+  }
+  else if(tile===KEY) {
+    const kx=px+ts/2, ky=py+ts/2;
+    const pulse = 0.85+0.15*Math.sin(animFrame*0.08);
+    ctx.save(); ctx.translate(kx,ky); ctx.scale(pulse,pulse);
+    // Glow
+    const rg=ctx.createRadialGradient(0,0,0,0,0,ts*0.5);
+    rg.addColorStop(0,'rgba(255,200,0,0.3)'); rg.addColorStop(1,'rgba(255,200,0,0)');
+    ctx.fillStyle=rg; ctx.beginPath(); ctx.arc(0,0,ts*0.5,0,Math.PI*2); ctx.fill();
+    // Key body
+    ctx.fillStyle='#ffcc00'; ctx.strokeStyle='#ff8800'; ctx.lineWidth=scale;
+    ctx.beginPath(); ctx.arc(0,-ts*0.12,ts*0.22,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='#ffcc00';
+    ctx.fillRect(-ts*0.06,-ts*0.06,ts*0.12,ts*0.38);
+    ctx.fillRect(ts*0.0,ts*0.2,ts*0.12,ts*0.08);
+    ctx.fillRect(ts*0.0,ts*0.28,ts*0.1,ts*0.08);
+    ctx.restore();
+  }
+  else if(tile===SWITCH || tile===SWITCH_ON) {
+    const on = tile===SWITCH_ON;
+    ctx.fillStyle=on?'#00aa44':'#884400';
+    ctx.fillRect(px+ts*0.2,py+ts*0.2,ts*0.6,ts*0.6);
+    ctx.strokeStyle=on?'#00ff88':'#ffaa00'; ctx.lineWidth=scale;
+    ctx.strokeRect(px+ts*0.2,py+ts*0.2,ts*0.6,ts*0.6);
+    ctx.fillStyle=on?'#00ff88':'#ff8800';
+    const sy=on?py+ts*0.3:py+ts*0.55;
+    ctx.fillRect(px+ts*0.35,sy,ts*0.3,ts*0.2);
+    // Label
+    ctx.fillStyle='#fff'; ctx.font=`bold ${ts*0.22}px Courier New`;
+    ctx.textAlign='center'; ctx.textBaseline='bottom';
+    ctx.fillText(on?'ON':'OFF',px+ts/2,py+ts*0.9);
+  }
+  else if(tile===DOOR) {
+    const dc = doorOpen ? '#00ff88' : '#cc3300';
+    ctx.fillStyle=doorOpen?'rgba(0,255,100,0.15)':'rgba(200,50,0,0.15)';
+    ctx.fillRect(px,py,ts,ts);
+    ctx.strokeStyle=dc; ctx.lineWidth=scale*1.5;
+    ctx.strokeRect(px+ts*0.1,py+ts*0.02,ts*0.8,ts*0.96);
+    // Door knob
+    ctx.fillStyle=dc;
+    ctx.beginPath(); ctx.arc(px+ts*0.75,py+ts*0.5,ts*0.07,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.3)';
+    ctx.font=`${ts*0.2}px Courier New`; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(doorOpen?'OPEN':'LOCK',px+ts/2,py+ts*0.5);
+  }
+  else if(tile===EXIT) {
+    const ep=0.6+0.4*Math.sin(animFrame*0.06);
+    const rg=ctx.createRadialGradient(px+ts/2,py+ts/2,0,px+ts/2,py+ts/2,ts*0.6);
+    rg.addColorStop(0,`rgba(0,200,255,${ep*0.6})`); rg.addColorStop(1,'rgba(0,200,255,0)');
+    ctx.fillStyle=rg; ctx.fillRect(px,py,ts,ts);
+    ctx.strokeStyle=`rgba(0,200,255,${ep})`; ctx.lineWidth=scale*1.5;
+    ctx.strokeRect(px+ts*0.1,py+ts*0.05,ts*0.8,ts*0.9);
+    ctx.fillStyle=`rgba(0,200,255,${ep})`;
+    ctx.font=`bold ${ts*0.18}px Courier New`; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('EXIT',px+ts/2,py+ts/2);
+    if(doorOpen) {
+      ctx.fillStyle=`rgba(0,255,150,${ep})`;
+      ctx.font=`${ts*0.14}px Courier New`;
+      ctx.fillText('▶ ENTER',px+ts/2,py+ts*0.72);
+    }
+  }
+  else if(tile===SPIKE) {
+    ctx.fillStyle='#886600';
+    const n=3;
+    for(let i=0;i<n;i++) {
+      const sx=px+ts*(0.2+i*0.28), sw=ts*0.18;
+      ctx.beginPath(); ctx.moveTo(sx,py+ts); ctx.lineTo(sx+sw/2,py+ts*0.2); ctx.lineTo(sx+sw,py+ts); ctx.fill();
+    }
+  }
+  else if(tile===COIN) {
+    const spin=Math.cos(animFrame*0.1+col*0.5)*0.8+0.2;
+    ctx.fillStyle='#ffee00';
+    ctx.save(); ctx.translate(px+ts/2,py+ts/2);
+    ctx.scale(spin,1);
+    ctx.beginPath(); ctx.arc(0,0,ts*0.22,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='#cc8800'; ctx.lineWidth=scale*0.8; ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function drawPlayer() {
+  if(!player.alive) return;
+  if(player.invincible>0 && Math.floor(animFrame/4)%2===0) return; // flicker
+
+  const px=player.x*scale, py=player.y*scale, s=scale;
+  const cx=px+AW*s/2, cy=py+AH*s/2;
+  const moving=Math.abs(player.vx)>0.5;
+  const t=animFrame;
+
+  ctx.save();
+  if(player.facing===-1){
+    ctx.translate(cx,0); ctx.scale(-1,1); ctx.translate(-cx,0);
+  }
+
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,0.25)';
+  ctx.beginPath(); ctx.ellipse(cx,py+AH*s+2*s,10*s,3*s,0,0,Math.PI*2); ctx.fill();
+
+  // Legs with walk animation
+  const legS=player.onGround&&moving ? Math.sin(t*0.25)*5*s : 0;
+  ctx.fillStyle='#c0c0c0';
+  ctx.fillRect(cx-6*s,cy+4*s,5*s,(8+legS)*s);
+  ctx.fillRect(cx+1*s,cy+4*s,5*s,(8-legS)*s);
+  // Boots
+  ctx.fillStyle='#777';
+  ctx.fillRect(cx-7*s,(cy+4*s)+(8+legS)*s,7*s,3*s);
+  ctx.fillRect(cx+0*s,(cy+4*s)+(8-legS)*s,7*s,3*s);
+
+  // Body
+  ctx.fillStyle='#e8e8e8';
+  ctx.beginPath(); ctx.roundRect(cx-8*s,cy-7*s,16*s,14*s,3*s); ctx.fill();
+  // Chest stripe
+  ctx.fillStyle='#ff4400';
+  ctx.fillRect(cx-5*s,cy-2*s,10*s,3*s);
+
+  // Backpack
+  ctx.fillStyle='#aaa'; ctx.fillRect(cx+7*s,cy-5*s,5*s,12*s);
+  ctx.fillStyle='#ff4400'; ctx.fillRect(cx+8*s,cy-2*s,3*s,3*s);
+
+  // Arms
+  const armS=player.onGround&&moving?Math.sin(t*0.25)*4*s:0;
+  ctx.fillStyle='#ddd';
+  ctx.fillRect(cx-13*s,cy-4*s+armS,6*s,9*s);
+  ctx.fillRect(cx+7*s,cy-4*s-armS,6*s,9*s);
+
+  // Helmet
+  ctx.fillStyle='#ddeeff';
+  ctx.beginPath(); ctx.arc(cx,cy-10*s,9*s,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#aaccee'; ctx.lineWidth=1.5*s; ctx.stroke();
+
+  // Visor
+  const vc = player.invincible>0 ? '#ff0000' : (!player.onGround&&player.vy<0?'#ffaa00':'#ff6600');
+  ctx.fillStyle=vc;
+  ctx.beginPath(); ctx.ellipse(cx+1*s,cy-10*s,5*s,4*s,0,0,Math.PI*2); ctx.fill();
+  // Shine
+  ctx.fillStyle='rgba(255,255,255,0.5)';
+  ctx.beginPath(); ctx.ellipse(cx-1*s,cy-12*s,2*s,1.5*s,-0.5,0,Math.PI*2); ctx.fill();
+
+  // Key indicator above head if holding key
+  if(keys_held>0) {
+    ctx.fillStyle='#ffcc00';
+    ctx.font=`bold ${10*s}px Courier New`;
+    ctx.textAlign='center'; ctx.textBaseline='bottom';
+    ctx.fillText('🔑'.repeat(keys_held),cx,py-4*s);
+  }
+
+  ctx.restore();
+}
+
+function drawEnemy(e) {
+  if(!e.alive) return;
+  const px=e.x*scale, py=e.y*scale, s=scale;
+  const cx=px+AW*s/2, cy=py+AH*s/2;
+  const t=e.animT;
+
+  ctx.save();
+  if(e.vx<0){ctx.translate(cx,0);ctx.scale(-1,1);ctx.translate(-cx,0);}
+
+  // Robot body
+  ctx.fillStyle='#cc2200';
+  ctx.fillRect(cx-7*s,cy-6*s,14*s,14*s);
+  ctx.strokeStyle='#ff4400'; ctx.lineWidth=s; ctx.strokeRect(cx-7*s,cy-6*s,14*s,14*s);
+
+  // Robot head
+  ctx.fillStyle='#dd3300'; ctx.fillRect(cx-5*s,cy-14*s,10*s,9*s);
+  // Eyes (blinking)
+  const blink=Math.floor(t/40)%6===0;
+  ctx.fillStyle=blink?'#ff4400':'#ffff00';
+  ctx.fillRect(cx-4*s,cy-12*s,3*s,blink?1*s:4*s);
+  ctx.fillRect(cx+1*s,cy-12*s,3*s,blink?1*s:4*s);
+
+  // Legs
+  const legS=Math.sin(t*0.2)*4*s;
+  ctx.fillStyle='#aa1100';
+  ctx.fillRect(cx-6*s,cy+7*s,5*s,6*s+legS);
+  ctx.fillRect(cx+1*s,cy+7*s,5*s,6*s-legS);
+
+  // Antenna
+  ctx.strokeStyle='#ff4400'; ctx.lineWidth=s;
+  ctx.beginPath(); ctx.moveTo(cx,cy-14*s); ctx.lineTo(cx,cy-20*s); ctx.stroke();
+  ctx.fillStyle='#ffff00';
+  ctx.beginPath(); ctx.arc(cx,cy-20*s,2*s,0,Math.PI*2); ctx.fill();
+
+  ctx.restore();
+}
+
+function drawBackground() {
+  // Sky gradient
+  const sg=ctx.createLinearGradient(0,0,0,H);
+  sg.addColorStop(0,'#0e0100'); sg.addColorStop(0.5,'#2a0800'); sg.addColorStop(1,'#5a1200');
+  ctx.fillStyle=sg; ctx.fillRect(0,0,W,H);
+
+  // Stars
+  ctx.fillStyle='rgba(255,210,170,0.8)';
+  const stars=[[60,18],[160,8],[260,28],[380,6],[480,20],[556,10],[90,44],[340,36],[200,52],[430,14],[80,62],[520,40]];
+  stars.forEach(([x,y])=>{
+    ctx.beginPath(); ctx.arc(x*scale,y*scale,scale,0,Math.PI*2); ctx.fill();
+  });
+
+  // Distant mountains
+  ctx.fillStyle='rgba(80,15,0,0.5)';
+  ctx.beginPath();
+  ctx.moveTo(0,H*0.35);
+  const mpts=[[0.05,0.28],[0.12,0.18],[0.18,0.24],[0.26,0.12],[0.32,0.2],[0.4,0.08],[0.48,0.22],[0.55,0.14],[0.62,0.26],[0.72,0.1],[0.8,0.2],[0.88,0.15],[0.95,0.22],[1.0,0.3]];
+  mpts.forEach(([mx,my])=>ctx.lineTo(W*mx,H*my));
+  ctx.lineTo(W,H*0.35); ctx.lineTo(0,H*0.35); ctx.fill();
+}
+
+function drawHUD() {
+  // Key / switch status bar
+  const barY=30*scale, bh=20*scale;
+  ctx.fillStyle='rgba(0,0,0,0.5)';
+  ctx.fillRect(4*scale,barY,200*scale,bh);
+
+  ctx.font=`bold ${12*scale}px Courier New`;
+  ctx.textBaseline='middle';
+
+  ctx.fillStyle=keys_held>=keys_needed&&keys_needed>0?'#00ff88':'#ffcc00';
+  ctx.textAlign='left';
+  ctx.fillText(`🔑 ${keys_held}/${keys_needed}  ⚡ ${switches_done}/${switches_needed}`,8*scale,barY+bh/2);
+
+  if(doorOpen && keys_needed>0) {
+    ctx.fillStyle='#00ff88';
+    ctx.textAlign='center';
+    ctx.fillText('🚪 DOOR OPEN — FIND EXIT!',W/2,barY+bh/2);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// MAIN GAME LOOP
+// ═══════════════════════════════════════════════════════
+function update() {
+  if(gameState!=='playing') return;
+
+  animFrame++;
+  levelTime++;
+  if(player.invincible>0) player.invincible--;
+
+  // Input
+  const goLeft  = inputKeys['ArrowLeft']||inputKeys['KeyA']||mLeft;
+  const goRight = inputKeys['ArrowRight']||inputKeys['KeyD']||mRight;
+  const doJump  = inputKeys['Space']||inputKeys['ArrowUp']||inputKeys['KeyW'];
+
+  if(goLeft)       { player.vx=-MOVE_SPD; player.facing=-1; }
+  else if(goRight) { player.vx= MOVE_SPD; player.facing= 1; }
+  else             { player.vx=0; }
+
+  if((doJump||mJump) && player.onGround && !mJumpConsumed) {
+    player.vy=JUMP_V;
+    player.onGround=false;
+    mJumpConsumed=mJump;
+  }
+  if(!mJump) mJumpConsumed=false;
+
+  moveEntity(player, AW, AH);
+  if(player.y>ROWS*T+50) killPlayer();
+
+  checkTileInteraction();
+  updateEnemies();
+  updateParticles();
+}
+
+function draw() {
+  ctx.clearRect(0,0,W,H);
+  drawBackground();
+
+  // Tiles
+  for(let r=0;r<ROWS;r++) {
+    for(let c=0;c<COLS;c++) {
+      if(tileMap[r][c]!==AIR) drawTile(c,r,tileMap[r][c]);
+    }
+  }
+
+  // Entities
+  enemies.forEach(e=>drawEnemy(e));
+  drawPlayer();
+  drawParticles();
+
+  if(gameState==='playing') drawHUD();
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// ═══════════════════════════════════════════════════════
+// SCREENS & GAME MANAGEMENT
+// ═══════════════════════════════════════════════════════
+function showScreen(which) {
+  ['title','level','gameover','win'].forEach(s=>{
+    document.getElementById('screen'+s.charAt(0).toUpperCase()+s.slice(1)).style.display=
+      s===which?'flex':'none';
+  });
+}
+function hideAllScreens() {
+  ['Title','Level','Over','Win'].forEach(s=>document.getElementById('screen'+s).style.display='none');
+}
+
+function startGame() {
+  score=0; lives=3; currentLevel=0;
+  updateHUD();
+  hideAllScreens();
+  loadLevel(0);
+}
+
+function restartGame() {
+  score=0; lives=3; currentLevel=0;
+  updateHUD();
+  hideAllScreens();
+  loadLevel(0);
+}
+
+function nextLevel() {
+  currentLevel++;
+  if(currentLevel>=LEVEL_MAPS.length) {
+    document.getElementById('winScore').textContent='⭐ FINAL SCORE: '+score;
+    document.getElementById('winLives').textContent='❤️'.repeat(lives);
+    showScreen('win');
+    gameState='win';
+    return;
+  }
+  hideAllScreens();
+  loadLevel(currentLevel);
+}
+
+function loadLevel(idx) {
+  parseLevel(idx);
+  gameState='playing';
+  updateHUD();
+}
+
+function updateHUD() {
+  document.getElementById('uiLives').textContent=lives;
+  document.getElementById('uiScore').textContent=score;
+  document.getElementById('uiLevel').textContent=currentLevel+1;
+}
+
+// Restart current level
+function restartLevel() {
+  if(gameState!=='playing') return;
+  parseLevel(currentLevel);
+  updateHUD();
+}
+
+// ═══════════════════════════════════════════════════════
+// INPUT
+// ═══════════════════════════════════════════════════════
+window.addEventListener('keydown',e=>{
+  inputKeys[e.code]=true;
+  if(e.code==='KeyR'&&gameState==='playing') restartLevel();
+  if(['Space','ArrowUp','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+});
+window.addEventListener('keyup',e=>{ inputKeys[e.code]=false; });
+
+// Mobile
+function mb(id, setOn, setOff) {
+  const el=document.getElementById(id);
+  el.addEventListener('touchstart',e=>{setOn();e.preventDefault();},{passive:false});
+  el.addEventListener('touchend',  e=>{setOff();e.preventDefault();},{passive:false});
+  el.addEventListener('touchcancel',e=>{setOff();e.preventDefault();},{passive:false});
+}
+mb('mLeft', ()=>mLeft=true,  ()=>mLeft=false);
+mb('mRight',()=>mRight=true, ()=>mRight=false);
+mb('mJump', ()=>{ mJump=true; mJumpConsumed=false; }, ()=>{ mJump=false; });
+
+// ═══════════════════════════════════════════════════════
+// RESIZE & INIT
+// ═══════════════════════════════════════════════════════
+function resize() {
+  canvas=document.getElementById('c');
+  ctx=canvas.getContext('2d');
+  const maxW=window.innerWidth;
+  const maxH=window.innerHeight-50;
+  scale=Math.min(maxW/(COLS*T), maxH/(ROWS*T));
+  scale=Math.max(0.5,Math.min(2,scale));
+  W=Math.round(COLS*T*scale);
+  H=Math.round(ROWS*T*scale);
+  canvas.width=W; canvas.height=H;
+  canvas.style.width=W+'px'; canvas.style.height=H+'px';
+
+  // Set UI width to match
+  document.getElementById('ui').style.width=W+'px';
+  document.getElementById('mobileCtrl').style.width=W+'px';
+}
+
+window.addEventListener('resize',()=>{resize();});
+
+resize();
+// Start title render loop immediately so the bg looks nice on title screen
+gameState='title';
+loadLevel(0); // preload level 1 data for bg rendering
+gameState='title';
+showScreen('title');
+loop();
+</script>
+</body>
+</html>
